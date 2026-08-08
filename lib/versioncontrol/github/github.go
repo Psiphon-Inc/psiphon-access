@@ -41,9 +41,24 @@ import (
 
 var logger = logutils.NewPackageLogger(teleport.ComponentKey, teleport.ComponentVersionControl)
 
-// Visit uses the supplied visitor to aggregate release info from the github releases api.
+// Visit performs no request in this fork and leaves the visitor empty.
+//
+// FORK-LOCAL: upstream aggregates release info from the github releases api
+// here. The auth server calls it about every 24 hours to raise the
+// security-patch-available cluster alert.
+//
+// That call is the only request a default deployment makes to a host outside
+// the cluster. It carries no cluster data, but it discloses the egress address
+// of the deployment and a 24 hour pattern to a third party, and upstream gives
+// no configuration switch to stop it. This fork does not follow upstream
+// releases through the github api, so the request buys nothing here.
+//
+// The empty visitor makes the caller take its cleanup path, which clears any
+// alert an earlier build left behind. Everything below stays functional on
+// purpose: visit and Iterator hold the scraper logic that the package tests
+// exercise, and leaving them alone keeps this patch to one function.
 func Visit(visitor *vc.Visitor) error {
-	return visit(Iterator{}, visitor)
+	return nil
 }
 
 // visit is the business logic of Visit, broken out for testing purposes.
