@@ -16,6 +16,11 @@
     "web/**/*.mts",
     "web/.storybook/*.mts",
     "web/packages/build/vite",
+    "web/packages/teleport/src/psiphonBrand/brandCatalog.ts",
+    "web/packages/teleport/src/psiphonBrand/brandMatcher.ts",
+    "web/packages/teleport/src/psiphonBrand/brandPlugin.ts",
+    "web/packages/teleport/src/psiphonBrand/bundleGate.ts",
+    "web/packages/teleport/src/psiphonBrand/catalog",
     "web/packages/teleterm/csp.ts"
   ]
 }

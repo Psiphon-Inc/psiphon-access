@@ -1,0 +1,12 @@
+.git
+.direnv
+**/.direnv
+node_modules
+**/node_modules
+target
+dist
+docs
+webassets
+**/webassets
+e2e
+mobile
