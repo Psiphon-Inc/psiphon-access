@@ -29,6 +29,7 @@ import (
 	"github.com/gravitational/teleport/lib/auth/authclient"
 	"github.com/gravitational/teleport/lib/authz"
 	"github.com/gravitational/teleport/lib/events"
+	googleoidc "github.com/gravitational/teleport/lib/googleoidc/policy"
 )
 
 type OIDCService interface {
@@ -41,6 +42,12 @@ var errOIDCNotImplemented = &trace.AccessDeniedError{Message: "OIDC is only avai
 
 // UpsertOIDCConnector creates or updates an OIDC connector.
 func (a *Server) UpsertOIDCConnector(ctx context.Context, connector types.OIDCConnector) (types.OIDCConnector, error) {
+	// FORK-LOCAL: connector CRUD does not pass through OIDCService, so the
+	// fork Google policy is applied here. See lib/googleoidc/policy.
+	if err := googleoidc.ValidateConnector(connector); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	upserted, err := a.Services.UpsertOIDCConnector(ctx, connector)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -63,6 +70,12 @@ func (a *Server) UpsertOIDCConnector(ctx context.Context, connector types.OIDCCo
 
 // UpdateOIDCConnector updates an existing OIDC connector.
 func (a *Server) UpdateOIDCConnector(ctx context.Context, connector types.OIDCConnector) (types.OIDCConnector, error) {
+	// FORK-LOCAL: connector CRUD does not pass through OIDCService, so the
+	// fork Google policy is applied here. See lib/googleoidc/policy.
+	if err := googleoidc.ValidateConnector(connector); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	updated, err := a.Services.UpdateOIDCConnector(ctx, connector)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -85,6 +98,12 @@ func (a *Server) UpdateOIDCConnector(ctx context.Context, connector types.OIDCCo
 
 // CreateOIDCConnector creates a new OIDC connector.
 func (a *Server) CreateOIDCConnector(ctx context.Context, connector types.OIDCConnector) (types.OIDCConnector, error) {
+	// FORK-LOCAL: connector CRUD does not pass through OIDCService, so the
+	// fork Google policy is applied here. See lib/googleoidc/policy.
+	if err := googleoidc.ValidateConnector(connector); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	created, err := a.Services.CreateOIDCConnector(ctx, connector)
 	if err != nil {
 		return nil, trace.Wrap(err)
