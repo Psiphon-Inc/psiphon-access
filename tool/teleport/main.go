@@ -19,9 +19,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	_ "github.com/gravitational/teleport/lib/fipscheck"
+	"github.com/gravitational/teleport/lib/googleoidc"
 	"github.com/gravitational/teleport/lib/observability/metrics"
 	"github.com/gravitational/teleport/session/reexec"
 	"github.com/gravitational/teleport/tool/teleport/common"
@@ -32,9 +34,24 @@ func init() {
 }
 
 func main() {
+	// MaybeReexec must run before anything else in this file, including the
+	// fork activation below. When os.Args[1] names a reexec subcommand this
+	// process is a short-lived helper, not teleport, and that path must not
+	// parse TELEPORT_ENABLE_GOOGLE_OIDC or touch the process-wide modules
+	// value.
 	reexec.MaybeReexec()
 
+	// FORK-LOCAL: Google Workspace OIDC is compiled in and off by default.
+	// Activate must run before common.Run: the auth server copies
+	// modules.GetModules() at construction time. See lib/googleoidc.Activate.
+	registry, err := googleoidc.Activate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "teleport: %v\n", err)
+		os.Exit(1)
+	}
+
 	common.Run(common.Options{
-		Args: os.Args[1:],
+		Args:           os.Args[1:],
+		PluginRegistry: registry,
 	})
 }

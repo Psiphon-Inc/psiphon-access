@@ -51,6 +51,7 @@ import (
 	"github.com/gravitational/teleport/lib/defaults"
 	dtconfig "github.com/gravitational/teleport/lib/devicetrust/config"
 	"github.com/gravitational/teleport/lib/modules"
+	"github.com/gravitational/teleport/lib/plugin"
 	"github.com/gravitational/teleport/lib/scopes"
 	"github.com/gravitational/teleport/lib/service"
 	"github.com/gravitational/teleport/lib/service/servicecfg"
@@ -75,6 +76,10 @@ type Options struct {
 	// InitOnly when set to true, initializes config and aux
 	// endpoints but does not start the process
 	InitOnly bool
+	// PluginRegistry, when set, is used instead of the empty registry that
+	// service.NewTeleport creates. Nothing can add a plugin after the process
+	// is built, so a caller that ships plugins must pass them here.
+	PluginRegistry plugin.Registry
 }
 
 // Run inits/starts the process according to the provided options
@@ -706,6 +711,7 @@ Examples:
 	// Create default configuration.
 	conf = servicecfg.MakeDefaultConfig()
 	conf.ScopesFeatures = scopes.FeaturesFromEnv()
+	conf.PluginRegistry = options.PluginRegistry
 
 	// If FIPS mode is specified update defaults to be FIPS appropriate and
 	// cross-validate the current config.
