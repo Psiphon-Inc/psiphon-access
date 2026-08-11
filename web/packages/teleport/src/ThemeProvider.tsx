@@ -38,13 +38,30 @@ import { ConfiguredThemeProvider } from 'design/ThemeProvider';
 import { Theme as ThemePreference } from 'gen-proto-ts/teleport/userpreferences/v1/theme_pb';
 
 import cfg from 'teleport/config';
+import {
+  PSIPHON_THEME_NAME,
+  psiphonLegacyTheme,
+  psiphonUiTheme,
+} from 'teleport/psiphonTheme';
 import { KeysEnum, storageService } from 'teleport/services/storageService';
 
 const customThemes = {
   bblp: bblpTheme,
   // Lock mc to light theme, and flag it as a custom theme to disable the theme switcher.
   mc: { ...lightTheme, isCustomTheme: true },
+  [PSIPHON_THEME_NAME]: psiphonLegacyTheme,
 };
+
+// FORK ADDITION. THEMES is a hardcoded array inside @gravitational/design-system,
+// which is installed from a release tarball rather than a workspace, so a theme
+// cannot be added to it without forking a second repository. That limitation
+// applies to registering a theme, but does not apply to authoring one, because
+// UiTheme.config is a plain Chakra SystemConfig, so the fork authors its tokens
+// entirely in this repository. Consulting a fork-owned list first is the cheapest
+// alternative: it keeps the theme itself out of upstream files and confines the
+// change here. This file has taken 5 upstream commits in two years, so it is a
+// cheap place to carry a patch.
+const forkThemes = [psiphonUiTheme];
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const themePreference = useThemePreference();
@@ -52,6 +69,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
   const selectedTheme = useMemo(() => {
     const theme =
+      forkThemes.find(t => t.name === cfg.customTheme) ??
       THEMES.find(t => t.name === cfg.customTheme) ??
       THEMES.find(t => t.name === TELEPORT_THEME.name);
 
