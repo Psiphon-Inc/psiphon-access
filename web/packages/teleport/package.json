@@ -44,8 +44,10 @@
     "events": "3.3.0"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.7",
     "@gravitational/build": "workspace:*",
     "@gravitational/teleport": "workspace:*",
+    "magic-string": "^0.30.21",
     "babel-plugin-transform-import-meta": "2.3.3",
     "babel-plugin-transform-vite-meta-env": "^1.0.3",
     "babel-plugin-transform-vite-meta-hot": "^1.0.0",

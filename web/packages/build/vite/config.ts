@@ -27,6 +27,7 @@ import { defineConfig, type ProxyOptions, type UserConfig } from 'vite';
 import { compression } from 'vite-plugin-compression2';
 import wasm from 'vite-plugin-wasm';
 
+import { psiphonBrandPlugin } from '../../teleport/src/psiphonBrand/brandPlugin';
 import { generateAppHashFile } from './apphash';
 import { guardWasmPlugin } from './guard-wasm';
 import { htmlPlugin, transformPlugin } from './html';
@@ -128,6 +129,9 @@ export function createViteConfig(
         },
       },
       plugins: [
+        // Psiphon Access brand transform. Declares enforce: 'pre', so it sees
+        // raw .tsx source ahead of vite:react-swc. See ADR 0007.
+        psiphonBrandPlugin(),
         guardWasmPlugin(),
         reactPlugin(mode),
         transformPlugin(),
