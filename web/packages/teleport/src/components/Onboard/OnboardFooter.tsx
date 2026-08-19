@@ -18,22 +18,13 @@
 
 import styled from 'styled-components';
 
-import { Flex, Link, Text } from 'design';
+import { Flex, Text } from 'design';
 
 export const OnboardFooter = () => {
   return (
     <StyledFooter>
       <StyledContent>
-        <Text>&copy; Gravitational, Inc. All Rights Reserved</Text>
-        <StyledLink href={'https://goteleport.com/legal/tos/'} target="_blank">
-          Terms of Service
-        </StyledLink>
-        <StyledLink
-          href={'https://goteleport.com/legal/privacy/'}
-          target="_blank"
-        >
-          Privacy Policy
-        </StyledLink>
+        <Text>&copy; Psiphon Inc. Portions &copy; Gravitational, Inc.</Text>
       </StyledContent>
     </StyledFooter>
   );
@@ -55,15 +46,4 @@ const StyledFooter = styled('footer')`
   padding-bottom: ${props => props.theme.space[4]}px;
   width: 100%;
   color: ${props => props.theme.colors.text.main};
-`;
-
-const StyledLink = styled(Link)`
-  color: ${props => props.theme.colors.text.main};
-  text-decoration: none;
-
-  &:hover,
-  &:active,
-  &:focus {
-    color: ${props => props.theme.colors.text.muted};
-  }
 `;

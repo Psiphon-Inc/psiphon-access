@@ -63,6 +63,7 @@ export default function Xterm({ tty }: { tty: Tty }) {
       el: refContainer.current,
       fontFamily: theme.fonts.mono,
       fontSize: getPlatformType().isMac ? 12 : 14,
+      fontWeightBold: '500',
       theme: resolveColorTokens(system, theme.colors.terminal, theme.type),
     });
 

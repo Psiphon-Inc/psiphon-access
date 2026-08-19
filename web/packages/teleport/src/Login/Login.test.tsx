@@ -23,6 +23,7 @@ import selectEvent from 'react-select-event';
 import { fireEvent, render, screen, waitFor } from 'design/utils/testing';
 
 import cfg from 'teleport/config';
+import { PRODUCT_NAME } from 'teleport/productName';
 import auth from 'teleport/services/auth/auth';
 import history from 'teleport/services/history';
 import session from 'teleport/services/websession';
@@ -54,7 +55,7 @@ test('basic rendering', () => {
 
   // test rendering of logo and title
   expect(screen.getByRole('img')).toBeInTheDocument();
-  expect(screen.getByText(/sign in to teleport/i)).toBeInTheDocument();
+  expect(screen.getByText(`Sign in to ${PRODUCT_NAME}`)).toBeInTheDocument();
 });
 
 describe.each([
@@ -221,7 +222,7 @@ describe('test MOTD', () => {
 
     render(<LoginTest />);
 
-    expect(screen.getByText(/sign in to teleport/i)).toBeInTheDocument();
+    expect(screen.getByText(`Sign in to ${PRODUCT_NAME}`)).toBeInTheDocument();
     expect(screen.getByText(/Your access has changed/i)).toBeInTheDocument();
   });
 });

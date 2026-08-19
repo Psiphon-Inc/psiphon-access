@@ -20,7 +20,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { ImageAddon } from '@xterm/addon-image';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { ITheme, Terminal } from '@xterm/xterm';
+import { FontWeight, ITheme, Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 
 import {
@@ -111,6 +111,8 @@ export default class TtyTerminal implements TerminalSearcher {
       lineHeight: 1,
       fontFamily: this._fontFamily,
       fontSize: this._fontSize,
+      // Set weight to 500. DM Mono has no bold 700 weight. This stops browser fake bolding.
+      fontWeightBold: this.options.fontWeightBold ?? '500',
       scrollback: this._scrollBack,
       convertEol: this._convertEol,
       cursorBlink: false,
@@ -331,6 +333,7 @@ type Options = {
   scrollBack?: number;
   fontFamily?: string;
   fontSize?: number;
+  fontWeightBold?: FontWeight;
   convertEol?: boolean;
   // disableCopy blocks copying terminal text to clipboard.
   disableCopy?: boolean;

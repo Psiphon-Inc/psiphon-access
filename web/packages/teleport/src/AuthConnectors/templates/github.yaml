@@ -13,7 +13,7 @@ spec:
   # Connector display name that will become the title of an SSO login button on
   # the cluster login screen.
   display: GitHub
-  # mapping of GitHub team memberships to Teleport roles
+  # mapping of GitHub team memberships to Psiphon Access roles
   teams_to_roles:
     - organization: <github-org>
       team: <github-team>

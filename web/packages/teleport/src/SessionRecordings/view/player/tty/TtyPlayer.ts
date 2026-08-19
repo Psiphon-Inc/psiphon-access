@@ -61,6 +61,8 @@ export class TtyPlayer extends Player<TtyEvent> {
     this.terminal = new Terminal({
       fontSize: getPlatform() === Platform.macOS ? 12 : 14,
       fontFamily: this.fontFamily,
+      // Set weight to 500. DM Mono has no bold 700 weight. This stops browser fake bolding.
+      fontWeightBold: '500',
       cols: this.size.cols,
       rows: this.size.rows,
       theme: this.xtermTheme,

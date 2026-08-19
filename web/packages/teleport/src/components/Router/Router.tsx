@@ -41,6 +41,7 @@ import {
 
 import { NotFound } from 'design/CardError';
 
+import { PRODUCT_NAME } from 'teleport/productName';
 import history from 'teleport/services/history';
 
 // Re-export native React Router components for use throughout the app
@@ -73,7 +74,9 @@ function TitleSetter({
     if (title && clusterId) {
       document.title = `${clusterId} • ${title}`;
     } else if (title) {
-      document.title = `${title}`;
+      // Cluster-scoped tabs keep their compact cluster and page identity.
+      // Public tabs have no cluster identity, so they add the product name.
+      document.title = `${title} • ${PRODUCT_NAME}`;
     }
   }, [title, clusterId]);
 

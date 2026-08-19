@@ -20,17 +20,16 @@ import { render, screen } from 'design/utils/testing';
 
 import { OnboardFooter } from './OnboardFooter';
 
-test('renders RR, TOS, and PP', () => {
+test('renders the copyright without terms or privacy links', () => {
   render(<OnboardFooter />);
 
   expect(
-    screen.getByText(/Gravitational, Inc. All Rights Reserved/i)
+    screen.getByText(/© Psiphon Inc. Portions © Gravitational, Inc./i)
   ).toBeInTheDocument();
   expect(
-    screen.getByRole('link', { name: /Terms of Service/i })
-  ).toHaveAttribute('href', 'https://goteleport.com/legal/tos/');
-  expect(screen.getByRole('link', { name: /Privacy Policy/i })).toHaveAttribute(
-    'href',
-    'https://goteleport.com/legal/privacy/'
-  );
+    screen.queryByRole('link', { name: /Terms of Service/i })
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('link', { name: /Privacy Policy/i })
+  ).not.toBeInTheDocument();
 });

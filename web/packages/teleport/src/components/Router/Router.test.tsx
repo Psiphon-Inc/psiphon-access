@@ -144,3 +144,27 @@ describe('Switch', () => {
     expect(screen.getByText('integrations')).toBeInTheDocument();
   });
 });
+
+test('adds the product name only to routes without a cluster ID', () => {
+  renderWithRouter(
+    '/login',
+    <Switch>
+      <Route path="/login" title="Login" element={<div>login</div>} />
+    </Switch>
+  );
+
+  expect(document.title).toBe('Login • Psiphon Access');
+
+  renderWithRouter(
+    '/web/cluster/root/resources',
+    <Switch>
+      <Route
+        path="/web/cluster/:clusterId/resources"
+        title="Resources"
+        element={<div>resources</div>}
+      />
+    </Switch>
+  );
+
+  expect(document.title).toBe('root • Resources');
+});
