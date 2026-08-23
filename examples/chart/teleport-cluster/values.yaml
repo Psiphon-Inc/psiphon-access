@@ -282,7 +282,7 @@ operator:
   # Set enabled to true to add the Kubernetes Teleport Operator
   enabled: false
   # Kubernetes Teleport Operator image
-  image: public.ecr.aws/gravitational/teleport-operator
+  image: ghcr.io/psiphon-inc/teleport-operator
   # Resources to request for the operator container
   # https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
   resources: {}
@@ -601,7 +601,7 @@ tls:
 # Container image for the cluster. By default, the image contains only the
 # Teleport application and its runtime dependencies, and does not contain a
 # shell.
-image: public.ecr.aws/gravitational/teleport-distroless
+image: ghcr.io/psiphon-inc/psiphon-access
 # Enterprise version of the image. By default, the image contains only the
 # Teleport application and its runtime dependencies, and does not contain a
 # shell.

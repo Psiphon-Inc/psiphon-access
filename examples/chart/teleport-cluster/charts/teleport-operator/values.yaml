@@ -82,7 +82,7 @@ fullNameOverride: ""
 #
 # You can override this to use your own Teleport Kubernetes Operator
 # image rather than a Teleport-published image.
-image: public.ecr.aws/gravitational/teleport-operator
+image: ghcr.io/psiphon-inc/teleport-operator
 
 # annotations --
 annotations:

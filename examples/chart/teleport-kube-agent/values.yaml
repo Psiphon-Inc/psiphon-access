@@ -944,7 +944,7 @@ adminClusterRoleBinding:
 # This setting only takes effect when [`enterprise`](#enterprise) is `false`.
 # When running an enterprise version, you must use
 # [`enterpriseImage`](#enterpriseImage) instead.
-image: public.ecr.aws/gravitational/teleport-distroless
+image: ghcr.io/psiphon-inc/psiphon-access
 
 # enterpriseImage(string) -- sets the container image used for Teleport Enterprise
 # agent pods created by the chart.
