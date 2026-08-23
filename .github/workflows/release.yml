@@ -1,0 +1,274 @@
+# Publish a Psiphon Access release.
+#
+# Fires on a v* tag. Four jobs run so that one failure does not lose the
+# others: charts and images publish to GHCR independently, the binaries are
+# built once and handed to the release job as an artifact.
+#
+# Every job that builds a container uses a buildx builder with the GitHub
+# Actions cache. Each build gets its own cache scope, because the artifact
+# build, the auth image and the operator image share stages but not layers,
+# and one shared scope would evict on every run. The cache is capped at 10 GB
+# for the whole repository, so watch for eviction if the scopes grow.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Deny by default. Each job grants only what it needs.
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CHART_REGISTRY: ghcr.io/psiphon-inc/charts
+  AUTH_IMAGE: ghcr.io/psiphon-inc/psiphon-access
+  OPERATOR_IMAGE: ghcr.io/psiphon-inc/teleport-operator
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.derive.outputs.tag }}
+      version: ${{ steps.derive.outputs.version }}
+    steps:
+      - name: Derive the tag and version
+        id: derive
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          if [ "${REF_TYPE}" != "tag" ]; then
+            echo "This workflow must run on a tag. Got ${REF_TYPE} ${REF_NAME}." >&2
+            exit 1
+          fi
+          case "${REF_NAME}" in
+            v*) ;;
+            *) echo "Tag ${REF_NAME} does not start with v." >&2; exit 1 ;;
+          esac
+          echo "tag=${REF_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "version=${REF_NAME#v}" >> "${GITHUB_OUTPUT}"
+
+  charts:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the tagged revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Confirm helm is present
+        run: |
+          set -euo pipefail
+          if ! command -v helm >/dev/null; then
+            echo "helm is not installed on this runner image. Add a setup step." >&2
+            exit 1
+          fi
+          helm version
+
+      - name: Package the charts
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          GITREF: ${{ github.sha }}
+        run: ./tool/teleport-google/release/build-charts.sh
+
+      - name: Sign in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${TOKEN}" | helm registry login ghcr.io \
+            --username "${ACTOR}" --password-stdin
+
+      - name: Publish the charts
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          GITREF: ${{ github.sha }}
+          REGISTRY: ${{ env.CHART_REGISTRY }}
+        run: ./tool/teleport-google/release/publish-charts.sh
+
+      - name: Verify the published charts
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          GITREF: ${{ github.sha }}
+          REGISTRY: ${{ env.CHART_REGISTRY }}
+          CONTAINER_ENGINE: docker
+        run: ./tool/teleport-google/release/verify-charts.sh
+
+      - name: Upload the chart packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: charts
+          path: out/release-helm-charts/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  binaries:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - name: Reclaim runner disk
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /usr/local/share/powershell \
+            "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}"
+          df -h /
+
+      - name: Check out the tagged revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Build the Linux amd64 artifacts
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          GITREF: ${{ github.sha }}
+          BUILD_CMD: docker buildx build
+          BUILD_EXTRA_ARGS: >-
+            --cache-from type=gha,scope=binaries
+            --cache-to type=gha,mode=max,scope=binaries
+        run: ./tool/teleport-google/release/build-artifacts.sh
+
+      - name: Verify the artifacts
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          GITREF: ${{ github.sha }}
+          CONTAINER_ENGINE: docker
+        run: ./tool/teleport-google/release/verify-artifacts.sh
+
+      - name: Upload the artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-amd64
+          path: |
+            out/release-linux-amd64/teleport-linux-amd64
+            out/release-linux-amd64/tctl-linux-amd64
+            out/release-linux-amd64/tsh-linux-amd64
+            out/release-linux-amd64/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  images:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Reclaim runner disk
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /usr/local/share/powershell \
+            "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}"
+          df -h /
+
+      - name: Check out the tagged revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Sign in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the auth image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: tool/teleport-google/Dockerfile
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.AUTH_IMAGE }}:${{ needs.meta.outputs.version }}
+            ${{ env.AUTH_IMAGE }}:${{ github.sha }}
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            GITREF=${{ github.sha }}
+          cache-from: type=gha,scope=image-auth
+          cache-to: type=gha,mode=max,scope=image-auth
+
+      - name: Build and push the operator image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: tool/teleport-google/Dockerfile.operator
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.OPERATOR_IMAGE }}:${{ needs.meta.outputs.version }}
+            ${{ env.OPERATOR_IMAGE }}:${{ github.sha }}
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            GITREF=${{ github.sha }}
+          cache-from: type=gha,scope=image-operator
+          cache-to: type=gha,mode=max,scope=image-operator
+
+  release:
+    needs:
+      - meta
+      - charts
+      - binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tagged revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download the artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: assets
+
+      - name: Compose the release notes from the tag message
+        env:
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}" || true
+          git tag -l --format='%(contents)' "${TAG}" > notes.md
+          if [ ! -s notes.md ]; then
+            printf 'Psiphon Access %s\n' "${TAG#v}" > notes.md
+          fi
+          cat notes.md
+
+      - name: Create the release
+        env:
+          TAG: ${{ needs.meta.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          find assets -type f -print
+          gh release create "${TAG}" \
+            --title "Psiphon Access ${TAG#v}" \
+            --notes-file notes.md \
+            --verify-tag \
+            assets/linux-amd64/teleport-linux-amd64 \
+            assets/linux-amd64/tctl-linux-amd64 \
+            assets/linux-amd64/tsh-linux-amd64 \
+            assets/linux-amd64/SHA256SUMS \
+            assets/charts/*.tgz
