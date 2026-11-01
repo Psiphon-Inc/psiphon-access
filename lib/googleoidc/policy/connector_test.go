@@ -334,6 +334,8 @@ func TestRedirectURLForProxyHTTPSAuthority(t *testing.T) {
 		{name: "case insensitive hostname", callback: "https://PrOxY.example.com/v1/webapi/oidc/callback", proxy: "proxy.example.com:443", allowed: true},
 		{name: "different proxy port", callback: "https://proxy.example.com/v1/webapi/oidc/callback", proxy: "proxy.example.com:8443"},
 		{name: "different callback port", callback: "https://proxy.example.com:8443/v1/webapi/oidc/callback", proxy: "proxy.example.com"},
+
+		{name: "malformed proxy authority", callback: "https://proxy.example.com:3080/v1/webapi/oidc/callback", proxy: "proxy.example.com:3080:443"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

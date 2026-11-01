@@ -23,6 +23,7 @@
 package policy
 
 import (
+	"net"
 	"net/url"
 	"slices"
 	"strings"
@@ -242,8 +243,15 @@ func RedirectURLForProxy(conn types.OIDCConnector, proxyAddress string) (string,
 		return "", trace.BadParameter("OIDC auth request is missing the proxy address")
 	}
 	// The validated callback uses HTTPS, so an omitted port is equivalent to 443.
-	callbackHost := strings.TrimSuffix(parsed.Host, ":443")
-	proxyHost := strings.TrimSuffix(proxyAddress, ":443")
+	withoutHTTPSPort := func(authority string) string {
+		_, port, err := net.SplitHostPort(authority)
+		if err == nil && port == "443" {
+			return strings.TrimSuffix(authority, ":443")
+		}
+		return authority
+	}
+	callbackHost := withoutHTTPSPort(parsed.Host)
+	proxyHost := withoutHTTPSPort(proxyAddress)
 	if !strings.EqualFold(callbackHost, proxyHost) {
 		return "", trace.BadParameter("OIDC redirect URL does not match the proxy address")
 	}
