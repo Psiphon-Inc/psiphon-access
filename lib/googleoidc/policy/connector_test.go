@@ -318,6 +318,42 @@ func TestRedirectURLForProxy(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestRedirectURLForProxyHTTPSAuthority fails if default-port normalization or
+// case-insensitive matching is removed, or if non-default ports are ignored.
+func TestRedirectURLForProxyHTTPSAuthority(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		callback string
+		proxy    string
+		allowed  bool
+	}{
+		{name: "implicit callback port", callback: "https://proxy.example.com/v1/webapi/oidc/callback", proxy: "proxy.example.com:443", allowed: true},
+		{name: "implicit proxy port", callback: "https://proxy.example.com:443/v1/webapi/oidc/callback", proxy: "proxy.example.com", allowed: true},
+		{name: "case insensitive hostname", callback: "https://PrOxY.example.com/v1/webapi/oidc/callback", proxy: "proxy.example.com:443", allowed: true},
+		{name: "different proxy port", callback: "https://proxy.example.com/v1/webapi/oidc/callback", proxy: "proxy.example.com:8443"},
+		{name: "different callback port", callback: "https://proxy.example.com:8443/v1/webapi/oidc/callback", proxy: "proxy.example.com"},
+
+		{name: "malformed proxy authority", callback: "https://proxy.example.com:3080/v1/webapi/oidc/callback", proxy: "proxy.example.com:3080:443"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			conn := testConnector(t, func(c *types.OIDCConnectorV3) {
+				c.Spec.RedirectURLs = []string{tt.callback}
+			})
+			got, err := RedirectURLForProxy(conn, tt.proxy)
+			if !tt.allowed {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.callback, got)
+		})
+	}
+}
+
 func TestValidateAuthRequestMode(t *testing.T) {
 	t.Parallel()
 
