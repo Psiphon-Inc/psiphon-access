@@ -1,0 +1,260 @@
+# Build and verify before any publication. Tags and protections stay human-controlled.
+name: Release candidate verification
+'on':
+  push:
+    branches:
+    - main
+  workflow_dispatch:
+    inputs: &id001
+      source_sha:
+        description: Full candidate source SHA
+        required: true
+        type: string
+      tooling_sha:
+        description: Full workflow and tooling SHA
+        required: true
+        type: string
+      version:
+        description: Release version without v
+        required: true
+        type: string
+  workflow_call:
+    inputs: *id001
+permissions:
+  contents: read
+concurrency:
+  group: candidate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      source: ${{ steps.check.outputs.source }}
+      tooling: ${{ steps.check.outputs.tooling }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+    - id: check
+      env:
+        SOURCE_INPUT: ${{ inputs.source_sha }}
+        TOOLING_INPUT: ${{ inputs.tooling_sha }}
+        VERSION_INPUT: ${{ inputs.version }}
+        EVENT_SHA: ${{ github.sha }}
+        WORKFLOW_SHA: ${{ github.workflow_sha }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        source=${SOURCE_INPUT:-$EVENT_SHA}
+        tooling=${TOOLING_INPUT:-$EVENT_SHA}
+        version=${VERSION_INPUT:-19.0.0-psiphon.2}
+        [[ "$source" =~ ^[0-9a-f]{40}$ && "$tooling" =~ ^[0-9a-f]{40}$ ]]
+        [[ "$tooling" == "$EVENT_SHA" && "$tooling" == "$WORKFLOW_SHA" ]]
+        [[ "$source" == "$tooling" ]]
+        [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-psiphon\.[0-9]+$ ]]
+        printf 'source=%s\ntooling=%s\nversion=%s\n' "$source" "$tooling" "$version" >> "$GITHUB_OUTPUT"
+  linux:
+    needs: identity
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.identity.outputs.version }}
+      GITREF: ${{ needs.identity.outputs.source }}
+      TOOLING_SHA: ${{ needs.identity.outputs.tooling }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+    - &id002
+      name: Check out exact tooling
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ needs.identity.outputs.tooling }}
+        path: tooling
+        persist-credentials: false
+    - &id003
+      name: Check out exact source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ needs.identity.outputs.source }}
+        path: source
+        persist-credentials: false
+    - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+    - name: Build and verify native Linux commands
+      run: bash tooling/tool/teleport-google/release/build-artifacts.sh "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/commands"
+    - name: Upload validated staging output
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: stage-linux-${{ matrix.arch }}
+        path: ${{ runner.temp }}/commands
+        if-no-files-found: error
+        retention-days: 3
+        compression-level: 0
+    - name: Remove staged outputs
+      if: always()
+      run: rm -rf "$RUNNER_TEMP/commands"
+    strategy:
+      fail-fast: true
+      max-parallel: 2
+      matrix:
+        include:
+        - arch: amd64
+          runner: ubuntu-24.04
+        - arch: arm64
+          runner: ubuntu-24.04-arm
+  darwin:
+    needs: identity
+    runs-on: macos-15
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.identity.outputs.version }}
+      GITREF: ${{ needs.identity.outputs.source }}
+      TOOLING_SHA: ${{ needs.identity.outputs.tooling }}
+    steps:
+    - *id002
+    - *id003
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      with:
+        go-version: 1.26.5
+        cache: false
+    - name: Build and verify native Darwin commands
+      run: bash tooling/tool/teleport-google/release/build-darwin-arm64.sh "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/commands"
+    - name: Upload validated staging output
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: stage-darwin-arm64
+        path: ${{ runner.temp }}/commands
+        if-no-files-found: error
+        retention-days: 3
+        compression-level: 0
+    - name: Remove staged outputs
+      if: always()
+      run: rm -rf "$RUNNER_TEMP/commands"
+  images:
+    needs: identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.identity.outputs.version }}
+      GITREF: ${{ needs.identity.outputs.source }}
+      TOOLING_SHA: ${{ needs.identity.outputs.tooling }}
+    steps:
+    - *id002
+    - *id003
+    - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+    - name: Build and verify both amd64 runtime images without pushing
+      run: bash tooling/tool/teleport-google/release/build-artifacts.sh --images "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/images"
+    - name: Upload validated staging output
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: stage-images
+        path: ${{ runner.temp }}/images
+        if-no-files-found: error
+        retention-days: 3
+        compression-level: 0
+    - name: Remove staged outputs
+      if: always()
+      run: rm -rf "$RUNNER_TEMP/images"
+  charts:
+    needs: identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.identity.outputs.version }}
+      GITREF: ${{ needs.identity.outputs.source }}
+      TOOLING_SHA: ${{ needs.identity.outputs.tooling }}
+    steps:
+    - *id002
+    - *id003
+    - name: Check offline chart tools
+      run: |-
+        command -v helm
+        python3 -c 'import yaml'
+    - name: Package and verify charts offline
+      run: bash tooling/tool/teleport-google/release/build-charts.sh "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/charts"
+    - name: Upload validated staging output
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: stage-charts
+        path: ${{ runner.temp }}/charts
+        if-no-files-found: error
+        retention-days: 3
+        compression-level: 0
+    - name: Remove staged outputs
+      if: always()
+      run: rm -rf "$RUNNER_TEMP/charts"
+  candidate:
+    needs:
+    - identity
+    - linux
+    - darwin
+    - images
+    - charts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.identity.outputs.version }}
+      GITREF: ${{ needs.identity.outputs.source }}
+      TOOLING_SHA: ${{ needs.identity.outputs.tooling }}
+    steps:
+    - *id002
+    - *id003
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        pattern: stage-*
+        path: ${{ runner.temp }}/staging
+    - name: Assemble the complete candidate and independently verify bytes
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 - <<'PYCODE'
+        import hashlib, json, os, pathlib, shutil
+        base = pathlib.Path(os.environ['RUNNER_TEMP'])
+        stage, out = base / 'staging', base / 'candidate'
+        out.mkdir()
+        (out / 'commands').mkdir()
+        (out / 'evidence').mkdir()
+        version, source, tooling = (os.environ[k] for k in ('VERSION', 'GITREF', 'TOOLING_SHA'))
+        for platform in ('linux-amd64', 'linux-arm64', 'darwin-arm64'):
+            directory = stage / ('stage-' + platform)
+            tools = ('tctl', 'tsh') if platform.startswith('darwin') else ('teleport', 'tctl', 'tsh')
+            names = [t + '-' + platform for t in tools]
+            assert {p.name for p in directory.iterdir()} == set(names + ['PROVENANCE.txt'])
+            for name in names: shutil.copyfile(directory / name, out / 'commands' / name)
+            shutil.copyfile(directory / 'PROVENANCE.txt', out / 'evidence' / (platform + '.txt'))
+        for kind in ('images', 'charts'):
+            shutil.copytree(stage / ('stage-' + kind), out / kind)
+        for path in list((out / 'evidence').iterdir()) + [out / k / 'PROVENANCE.txt' for k in ('images', 'charts')]:
+            assert path.read_text().splitlines()[:3] == ['Version: ' + version, 'Source: ' + source, 'Tooling: ' + tooling], 'Staging provenance mismatch'
+        PYCODE
+        mapfile -t binaries < <(find "$RUNNER_TEMP/candidate/commands" -maxdepth 1 -type f | LC_ALL=C sort)
+        [[ ${#binaries[@]} == 8 ]]
+        SHA256SUMS_FILE="$RUNNER_TEMP/candidate/commands/SHA256SUMS" bash tooling/tool/teleport-google/release/generate-checksums.sh "${binaries[@]}"
+        bash tooling/tool/teleport-google/release/verify-artifacts.sh --manifest "$RUNNER_TEMP/candidate/commands"
+        python3 - <<'PYCODE'
+        import hashlib, json, os, pathlib
+        root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'candidate'
+        def sha(path):
+            with path.open('rb') as f: return hashlib.file_digest(f, 'sha256').hexdigest()
+        receipt = dict(version=os.environ['VERSION'], source=os.environ['GITREF'], tooling=os.environ['TOOLING_SHA'], run_id=os.environ['GITHUB_RUN_ID'], files={str(p.relative_to(root)): sha(p) for p in sorted(root.rglob('*')) if p.is_file()})
+        (root / 'candidate.json').write_text(json.dumps(receipt, sort_keys=True) + '\n')
+        PYCODE
+        bash tooling/tool/teleport-google/release/publish-charts.sh --check-inputs "$RUNNER_TEMP/candidate"
+    - name: Upload validated staging output
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: release-candidate
+        path: ${{ runner.temp }}/candidate
+        if-no-files-found: error
+        retention-days: 3
+        compression-level: 0
+    - name: Remove staged outputs
+      if: always()
+      run: rm -rf "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/staging"

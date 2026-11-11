@@ -400,7 +400,8 @@ What must still be true before another person is given access to a deployment:
 One public Git tag identifies a complete release. The tag points to a commit on
 `main`. Release evidence records one full 40-character commit, and the peeled tag
 must resolve to it. A moved tag, a dirty build context, or a revision mismatch
-stops the release.
+stops the release. The explicit prelaunch `.2` reset is the only exception.
+Its gates are in the release tooling README. Other versions remain immutable.
 
 The first release uses tag `v19.0.0-psiphon.1`. Charts and container images use
 version `19.0.0-psiphon.1`. The cluster, Kubernetes agent and Operator charts are
@@ -409,9 +410,10 @@ not used.
 
 ### Public command artifacts
 
-A pinned, clean Debian container builds every public command artifact. The build
-must not copy an executable from the Nix host. The release contains eight binaries
-and one checksum file:
+A pinned, clean Debian container builds every public Linux command artifact.
+Native macOS ARM64 CI builds the Darwin tools as the only build-boundary exception.
+The build must not copy an executable from the Nix host. The release contains eight
+binaries and one checksum file:
 
 ```text
 teleport-linux-amd64    tctl-linux-amd64    tsh-linux-amd64
@@ -423,12 +425,25 @@ SHA256SUMS
 Linux builds link statically where the source allows it, and verification inspects
 each file for a dynamic interpreter. A tool that cannot link statically has its
 measured constraint recorded, and a pinned Debian container builds the dynamic
-file. A failed static build is never silently replaced by a host build. The macOS
-files cross-compile with `CGO_ENABLED=0`, and work stops if a tool requires CGO or
-an Apple SDK rather than falling back to Nix.
+file. A failed static build is never silently replaced by a host build. The Darwin
+build uses native macOS ARM64 CI with `CGO_ENABLED=1` and the Apple SDK. Go is pinned
+to `1.26.5` with `GOTOOLCHAIN=local`. The build must record the SDK, Xcode, runner
+image, source revision and tooling revision. It must inspect Mach-O architecture
+and dynamic-library dependencies, then run both tools with an isolated home
+directory. A failed build stops without a Nix fallback or a partial artifact upload.
+The candidate tooling is `.github/workflows/release-arm64.yml` and
+`tool/teleport-google/release/build-darwin-arm64.sh`. Native CI proof is pending. The same workflow also stages both
+native Linux architectures, both amd64 runtime images, and the three charts.
+It verifies the full candidate before publication. Source and tooling revisions
+are separate evidence fields. A candidate build does not require a moved tag.
+The release tooling README records the explicit prelaunch `.2` reset gates.
+Automatic `.2` publication is disabled. Settings and tag changes stay human-controlled.
+The fork-original release workflows are `.github/workflows/release.yml` and
+`.github/workflows/release-arm64.yml`. No upstream runtime source changes are required.
 
 Each static Linux file must run in a scratch runtime container, and each tool must
-report the release version and the tagged revision. `SHA256SUMS` covers all eight
+report the release version and the tagged revision. Each Darwin tool must report
+the same metadata during native runtime checks. `SHA256SUMS` covers all eight
 binaries in sorted order, and a separate clean process must pass
 `sha256sum --check`. Raw GitHub release assets do not preserve executable mode, so
 public download instructions include `chmod +x`.
